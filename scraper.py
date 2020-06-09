@@ -10,6 +10,8 @@ opts.set_headless()
 assert opts.headless  # Operating in headless mode
 browser = Firefox(executable_path='./geckodriver', options=opts)
 
+import json
+import string
 
 def clean_data(some_text):
 	"""Cleans the data for saving"""
@@ -18,6 +20,13 @@ def clean_data(some_text):
 def clean_key(some_key):
 	"""Cleans the key for the dict"""
 	return some_key.strip()
+
+removal_char = [["\xb0", ''], ['\xB5', 'u']]
+def clean_units(units):
+	"""Removes all the Unicode characters from units"""
+	for char in removal_char:
+		units = units.replace(char[0], char[1])
+	return units
 
 def more_data(more_text):
 	"""Appends new data to the prev thing list"""
@@ -43,20 +52,20 @@ def convert_to_dict(results):
 	elif len(split_results) == 2: # Assuming value, units
 		try: 
 			values['value'] = float(split_results[0])
-			values['units'] = split_results[1]
+			values['units'] = clean_units(split_results[1])
 		except:
 			print('error with simple value/units conversion')
 	elif len(split_results) == 3: # Assuming max value of materials
 		try: 
 			values['max'] = float(split_results[1])
-			values['units'] = split_results[2]
+			values['units'] = clean_units(split_results[2])
 		except:
 			print('error with max material percentage')
 	elif len(split_results) == 4: # Assuming range of material values
 		try: 
 			values['max'] = float(split_results[2])
 			values['min'] = float(split_results[0])
-			values['units'] = split_results[3]
+			values['units'] = clean_units(split_results[3])
 		except:
 			print('error with material percentage range')
 	else:
@@ -77,20 +86,23 @@ def convert_list_to_dict(results_list):
 		if len(split_results) == 7: # Assuming max min of temp with list
 			try: 
 				values['value'] = float(split_results[0])
-				values['units'] = split_results[1]
+				values['units'] = clean_units(split_results[1])
 				values['max temp'] = float(split_results[3])
 				values['min temp'] = float(split_results[5])
-				values['temp units'] = split_results[6]
+				values['temp units'] = clean_units(split_results[6])
 			except:
 				print('error with 7 value temp dependent conversion')
 		elif len(split_results) == 5: # Assuming list with with only max temp
 			try: 
 				values['value'] = float(split_results[0])
-				values['units'] = split_results[1]
-				values['max temp'] = float(split_results[3])
-				values['temp units'] = split_results[4]
+				values['units'] = clean_units(split_results[1])
+				values['max temp'] = float(''.join(c for c in split_results[3] if c.isdigit()))
+				values['temp units'] = clean_units(split_results[4])
 			except:
 				print('error with 5 value temp dependent conversion')
+				print(split_results[3])
+				print(split_results[3][2:])
+				print(split_results)
 		else:
 			print('Other stuff is happening that Im not ready for')
 			break
@@ -103,11 +115,16 @@ def convert_list_to_dict(results_list):
 
 
 
+
+########################### HERE'S WHERE ALL THE WORK BEGINS ####################################33
 webpages = [
 		"http://www.matweb.com/search/DataSheet.aspx?MatGUID=9d1e943f7daf49ef92e1d8261a8c6fc6",
 		"http://www.matweb.com/search/datasheet.aspx?MatGUID=1e1bb328dc144aa3b50d3eb9c39f8b8b",
 		"http://www.matweb.com/search/datasheet.aspx?MatGUID=dd9850edc3bc4dd589f89662e0028daa",
 		]
+
+directory = 'materialData'
+
 
 for webpage in webpages:
 	browser.get(webpage)
@@ -132,7 +149,6 @@ for webpage in webpages:
 			results[prev_key] = more_data(other_stuff[1].text)
 		
 
-
 	pass_list = ['name']
 
 	for key in results.keys():
@@ -142,5 +158,8 @@ for webpage in webpages:
 			pass
 		else:
 			results[key] = convert_to_dict(results[key])
-
-	print(results)
+	
+	json_file = directory + '/' + results['name'] +'.json'
+	with open(json_file, 'w', encoding='utf-8') as f:
+		json.dump(json.dumps(results), f)
+		
