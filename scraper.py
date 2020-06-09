@@ -13,6 +13,20 @@ browser = Firefox(executable_path='./geckodriver', options=opts)
 import json
 import string
 
+import logging
+logger = logging.getLogger('scraper')
+logger.setLevel(logging.DEBUG)
+
+ch = logging.StreamHandler()
+formatter = logging.Formatter('%(name)s:%(levelname)s: %(message)s')
+ch.setLevel(logging.DEBUG)
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+fh = logging.FileHandler('scraper.log', mode='w')
+fh.setLevel(logging.INFO)
+fh.setFormatter(formatter)
+logger.addHandler(fh)
 
 ######################## ALL THE STUFF FOR AN INDIVIDUAL WEBPAGE ############################
 
@@ -21,6 +35,7 @@ class Webpage:
 		self.results = {}
 		self.removal_char = [["\xb0", ''], ['\xB5', 'u']]
 		self.prev_key = None
+		self.pass_list = ['name']
 		self.scrape_page(url)
 		
 	def clean_data(self, some_text):
@@ -45,7 +60,7 @@ class Webpage:
 			listed_data = [self.results[self.prev_key], self.clean_data(more_text)]
 		return listed_data
 
-	def convert_to_dict(self, str_results):
+	def convert_static_value(self, str_results):
 		"""Takes in the raw string of the values and returns a dict of the value and units"""
 		values = {}
 		split_results = str_results.split()
@@ -54,69 +69,58 @@ class Webpage:
 			try: 
 				values['value'] = float(split_results[0])
 			except:
-				print('error with value conversion')
+				logger.error('Error with value conversion {}'.format(split_results))
 		elif len(split_results) == 2: # Assuming value, units
 			try: 
 				values['value'] = float(split_results[0])
 				values['units'] = self.clean_units(split_results[1])
 			except:
-				print('error with simple value/units conversion')
+				logger.error('Error with simple value/units conversion {}'.format(split_results))
 		elif len(split_results) == 3: # Assuming max value of materials
 			try: 
 				values['max'] = float(split_results[1])
 				values['units'] = self.clean_units(split_results[2])
 			except:
-				print('error with max material percentage', split_results)
+				logger.error('Error with max material percentage {}'.format(split_results))
 		elif len(split_results) == 4: # Assuming range of material values
 			try: 
 				values['max'] = float(split_results[2])
 				values['min'] = float(split_results[0])
 				values['units'] = self.clean_units(split_results[3])
 			except:
-				print('error with material percentage range')
+				logger.error('Error with material percentage range {}'.format(split_results))
 		else:
-			print('Other stuff is happening that Im not ready for')
+			logger.error('Other stuff is happening that Im not ready for {}'.format(split_results))
 		
 		
 		return values
 
-	def convert_list_to_dict(self, results_list):
+	def convert_temp_dep(self, str_results):
 		"""Takes in the raw string of the values and returns a dict of the value and units"""
-		complete_list = []
+		values = {}
+		split_results = str_results.split()
 		
-		for interm_results in results_list:
-			values = {}
-			
-			split_results = interm_results.split()
-			
-			if len(split_results) == 7: # Assuming max min of temp with list
-				try: 
-					values['value'] = float(split_results[0])
-					values['units'] = self.clean_units(split_results[1])
-					values['max temp'] = float(split_results[3])
-					values['min temp'] = float(split_results[5])
-					values['temp units'] = self.clean_units(split_results[6])
-				except:
-					print('error with 7 value temp dependent conversion')
-			elif len(split_results) == 5: # Assuming list with with only max temp
-				try: 
-					values['value'] = float(split_results[0])
-					values['units'] = self.clean_units(split_results[1])
-					values['max temp'] = float(''.join(c for c in split_results[3] if c.isdigit()))
-					values['temp units'] = self.clean_units(split_results[4])
-				except:
-					print('error with 5 value temp dependent conversion')
-					print(split_results[3])
-					print(split_results[3][2:])
-					print(split_results)
-			else:
-				print('Other stuff is happening that Im not ready for')
-				break
-			
-			complete_list.append(values)
-			
+		if len(split_results) == 7: # Assuming max min of temp with list
+			try: 
+				values['value'] = float(split_results[0])
+				values['units'] = self.clean_units(split_results[1])
+				values['max temp'] = float(split_results[3])
+				values['min temp'] = float(split_results[5])
+				values['temp units'] = self.clean_units(split_results[6])
+			except:
+				logger.error('error with 7 value temp dependent conversion {}'.format(split_results))
+		elif len(split_results) == 5: # Assuming list with with only max temp
+			try: 
+				values['value'] = float(split_results[0])
+				values['units'] = self.clean_units(split_results[1])
+				values['max temp'] = float(''.join(c for c in split_results[3] if c.isdigit()))
+				values['temp units'] = self.clean_units(split_results[4])
+			except:
+				logger.error('error with 5 value temp dependent conversion {}'.format(split_results))
+		else:
+			logger.error('Other stuff is happening in lists that Im not ready for {}'.format(split_results))
 		
-		return complete_list
+		return values
 
 	def scrape_page(self, webpage):
 		"""Gets all the data from a particular url"""
@@ -125,31 +129,37 @@ class Webpage:
 		header_data = browser.find_elements_by_xpath('/html/body/form/div/div/table/tbody/tr/th')
 		table_data = browser.find_elements_by_xpath('/html/body/form/div/div/table/tbody/tr/td')
 		
-
 		self.results['name'] = header_data[0].text
-
-		test_stuff = browser.find_elements_by_class_name('datarowSeparator')
-
+		logger.info("Processing material - {}".format(self.results['name']))
+		
+		material_info = browser.find_elements_by_class_name('datarowSeparator')
+		
+		#getting all the stuff and putting it into a usable format
 		self.prev_key = None
-		for thing in test_stuff:
-			other_stuff = thing.find_elements_by_xpath('td')
-			this_key = self.clean_key(other_stuff[0].text)
-			if len(this_key) > 1:
-				self.results[this_key] = self.clean_data(other_stuff[1].text)
-				self.prev_key = this_key
-			else:
-				self.results[self.prev_key] = self.more_data(other_stuff[1].text)
+		for row in material_info:
+			row_data = row.find_elements_by_xpath('td')
+			this_key = self.clean_key(row_data[0].text)
 			
-
-		pass_list = ['name']
-
+			if len(this_key) > 1: #string is not empty
+				logger.debug("Converting - {}".format(this_key))
+				self.results[this_key] = self.clean_data(row_data[1].text)
+				self.prev_key = this_key
+			else: #empty string means this is a continuation of previous thing
+				logger.debug("No title found, appending to - {}".format(self.prev_key))
+				self.results[self.prev_key] = self.more_data(row_data[1].text)
+		
+		#cleaning all the strings and converting them into usable stuff
 		for key in self.results.keys():
 			if type(self.results[key]) is list:
-				self.results[key] = self.convert_list_to_dict(self.results[key])
-			elif key in pass_list:
+				self.results[key] = [self.convert_temp_dep(data_point) for data_point in self.results[key]]
+			elif key in self.pass_list:
 				pass
 			else:
-				self.results[key] = self.convert_to_dict(self.results[key])
+				if "@Temperature" in self.results[key]:
+					self.results[key] = self.convert_temp_dep(self.results[key])
+				else:
+					self.results[key] = self.convert_static_value(self.results[key])
+			logger.info("Found - {}:{}".format(key, self.results[key]))
 		
 		json_file = directory + '/' + self.results['name'] +'.json'
 		with open(json_file, 'w', encoding='utf-8') as f:
