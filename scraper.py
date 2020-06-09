@@ -12,6 +12,7 @@ browser = Firefox(executable_path='./geckodriver', options=opts)
 
 import json
 import string
+import time
 
 import logging
 logger = logging.getLogger('scraper')
@@ -19,7 +20,7 @@ logger.setLevel(logging.DEBUG)
 
 ch = logging.StreamHandler()
 formatter = logging.Formatter('%(name)s:%(levelname)s: %(message)s')
-ch.setLevel(logging.DEBUG)
+ch.setLevel(logging.INFO)
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
@@ -28,16 +29,17 @@ fh.setLevel(logging.INFO)
 fh.setFormatter(formatter)
 logger.addHandler(fh)
 
-######################## ALL THE STUFF FOR AN INDIVIDUAL WEBPAGE ############################
 
 class Webpage:
-	def __init__(self, url):
+	"""Takes a url for a matweb web page and creates a json file of all its info"""
+	def __init__(self, url, directory):
 		self.results = {}
 		self.removal_char = [["\xb0", ''], ['\xB5', 'u']]
 		self.prev_key = None
 		self.pass_list = ['name']
+		self.directory = directory
 		self.scrape_page(url)
-		
+	
 	def clean_data(self, some_text):
 		"""Cleans the data for saving"""
 		return some_text.strip()
@@ -161,11 +163,40 @@ class Webpage:
 					self.results[key] = self.convert_static_value(self.results[key])
 			logger.info("Found - {}:{}".format(key, self.results[key]))
 		
-		json_file = directory + '/' + self.results['name'] +'.json'
+		json_file = self.directory + '/' + self.results['name'] +'.json'
 		with open(json_file, 'w', encoding='utf-8') as f:
 			json.dump(json.dumps(self.results), f)
 
-########################### THIS IS THE STUFF TO NAVIGATE THROUGH THEIR TREE ####################
+
+class LinkFollower:
+	"""Finds all the links on a matweb group page and follows them and dumps them to json"""
+	def __init__(self, base_url, directory):
+		self.directory = directory
+		self.url = base_url
+		self.pass_list = ['[Prev Page]', '[Next Page]']
+		
+		self.materials = {}
+		self.find_urls()
+		
+		
+		
+	def find_urls(self):
+		browser.get(self.url)
+		
+		link_list = browser.find_elements_by_xpath('/html/body/form/div/table/tbody/tr/td/div/table/tbody/tr/td/a')
+		
+		for thing in link_list:
+			next_mat = thing.text
+			next_link = thing.get_attribute('href')
+			
+			if next_link is not None and next_mat not in self.pass_list:
+				logger.info("Found new material - {}:{}".format(next_mat, next_link))
+				self.materials[next_mat] = next_link
+			
+			time.sleep(1) #put this in here so we don't overload their servers
+	#use this to click on to the next page
+	#driver.find_element_by_partial_link_text('Next Page').click()
+
 
 
 
@@ -181,8 +212,8 @@ webpages = [
 ferrous_group = "http://www.matweb.com/Search/MaterialGroupSearch.aspx?GroupID=176"
 directory = 'materialData'
 
+LinkFollower(ferrous_group, directory)
 
 
-
-for webpage in webpages:
-	Webpage(webpage)
+#for webpage in webpages:
+	#Webpage(webpage)
