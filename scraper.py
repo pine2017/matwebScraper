@@ -13,6 +13,7 @@ browser = Firefox(executable_path='./geckodriver', options=opts)
 import json
 import string
 import time
+from os import path
 
 import logging
 logger = logging.getLogger('scraper')
@@ -38,7 +39,8 @@ class Webpage:
 		self.prev_key = None
 		self.pass_list = ['name']
 		self.directory = directory
-		self.scrape_page(url)
+		self.override = False
+		self.url = url
 	
 	def clean_data(self, some_text):
 		"""Cleans the data for saving"""
@@ -48,15 +50,11 @@ class Webpage:
 		"""Cleans the key for the dict"""
 		return some_key.strip()
 	
-	def clean_units(self, units):
+	def clean_unicode(self, units):
 		"""Removes all the Unicode characters from units"""
 		for char in self.removal_char:
 			units = units.replace(char[0], char[1])
 		return units
-	
-	def clean_filename(self, filename):
-		"""Takes out all the special characters for a valid filename"""
-		return ''.join(ch for ch in filename if ch.isalnum())
 	
 	def more_data(self, more_text):
 		"""Appends new data to the prev thing list"""
@@ -79,20 +77,20 @@ class Webpage:
 		elif len(split_results) == 2: # Assuming value, units
 			try: 
 				values['value'] = float(split_results[0])
-				values['units'] = self.clean_units(split_results[1])
+				values['units'] = self.clean_unicode(split_results[1])
 			except:
 				logger.error('Error with simple value/units conversion {}'.format(split_results))
 		elif len(split_results) == 3: # Assuming max value of materials
 			try: 
 				values['max'] = float(split_results[1])
-				values['units'] = self.clean_units(split_results[2])
+				values['units'] = self.clean_unicode(split_results[2])
 			except:
 				logger.error('Error with max material percentage {}'.format(split_results))
 		elif len(split_results) == 4: # Assuming range of material values
 			try: 
 				values['max'] = float(split_results[2])
 				values['min'] = float(split_results[0])
-				values['units'] = self.clean_units(split_results[3])
+				values['units'] = self.clean_unicode(split_results[3])
 			except:
 				logger.error('Error with material percentage range {}'.format(split_results))
 		else:
@@ -109,18 +107,18 @@ class Webpage:
 		if len(split_results) == 7: # Assuming max min of temp with list
 			try: 
 				values['value'] = float(split_results[0])
-				values['units'] = self.clean_units(split_results[1])
+				values['units'] = self.clean_unicode(split_results[1])
 				values['max temp'] = float(split_results[3])
 				values['min temp'] = float(split_results[5])
-				values['temp units'] = self.clean_units(split_results[6])
+				values['temp units'] = self.clean_unicode(split_results[6])
 			except:
 				logger.error('error with 7 value temp dependent conversion {}'.format(split_results))
 		elif len(split_results) == 5: # Assuming list with with only max temp
 			try: 
 				values['value'] = float(split_results[0])
-				values['units'] = self.clean_units(split_results[1])
+				values['units'] = self.clean_unicode(split_results[1])
 				values['max temp'] = float(''.join(c for c in split_results[3] if c.isdigit()))
-				values['temp units'] = self.clean_units(split_results[4])
+				values['temp units'] = self.clean_unicode(split_results[4])
 			except:
 				logger.error('error with 5 value temp dependent conversion {}'.format(split_results))
 		else:
@@ -128,48 +126,56 @@ class Webpage:
 		
 		return values
 
-	def scrape_page(self, webpage):
+	def scrape_page(self, mat_key):
 		"""Gets all the data from a particular url"""
-		browser.get(webpage)
-		
-		header_data = browser.find_elements_by_xpath('/html/body/form/div/div/table/tbody/tr/th')
-		table_data = browser.find_elements_by_xpath('/html/body/form/div/div/table/tbody/tr/td')
-		
-		self.results['name'] = header_data[0].text
-		logger.info("Processing material - {}".format(self.results['name']))
-		
-		material_info = browser.find_elements_by_class_name('datarowSeparator')
-		
-		#getting all the stuff and putting it into a usable format
-		self.prev_key = None
-		for row in material_info:
-			row_data = row.find_elements_by_xpath('td')
-			this_key = self.clean_key(row_data[0].text)
+		json_file = self.directory + '/' + self.clean_unicode(mat_key) +'.json'
+		print('here', json_file)
+		if (not path.exists(json_file)) or self.override: 
+			browser.get(self.url)
 			
-			if len(this_key) > 1: #string is not empty
-				logger.debug("Converting - {}".format(this_key))
-				self.results[this_key] = self.clean_data(row_data[1].text)
-				self.prev_key = this_key
-			else: #empty string means this is a continuation of previous thing
-				logger.debug("No title found, appending to - {}".format(self.prev_key))
-				self.results[self.prev_key] = self.more_data(row_data[1].text)
-		
-		#cleaning all the strings and converting them into usable stuff
-		for key in self.results.keys():
-			if type(self.results[key]) is list:
-				self.results[key] = [self.convert_temp_dep(data_point) for data_point in self.results[key]]
-			elif key in self.pass_list:
-				pass
-			else:
-				if "@Temperature" in self.results[key]:
-					self.results[key] = self.convert_temp_dep(self.results[key])
+			header_data = browser.find_elements_by_xpath('/html/body/form/div/div/table/tbody/tr/th')
+			table_data = browser.find_elements_by_xpath('/html/body/form/div/div/table/tbody/tr/td')
+			
+			self.results['name'] = self.clean_unicode(mat_key)
+			logger.info("Processing material - {}".format(self.results['name']))
+			
+			material_info = browser.find_elements_by_class_name('datarowSeparator')
+			
+			#getting all the stuff and putting it into a usable format
+			self.prev_key = None
+			for row in material_info:
+				row_data = row.find_elements_by_xpath('td')
+				this_key = self.clean_key(row_data[0].text)
+				
+				if len(this_key) > 1: #string is not empty
+					logger.debug("Converting - {}".format(this_key))
+					self.results[this_key] = self.clean_data(row_data[1].text)
+					self.prev_key = this_key
+				else: #empty string means this is a continuation of previous thing
+					logger.debug("No title found, appending to - {}".format(self.prev_key))
+					self.results[self.prev_key] = self.more_data(row_data[1].text)
+			
+			#cleaning all the strings and converting them into usable stuff
+			for key in self.results.keys():
+				if type(self.results[key]) is list:
+					self.results[key] = [self.convert_temp_dep(data_point) for data_point in self.results[key]]
+				elif key in self.pass_list:
+					pass
 				else:
-					self.results[key] = self.convert_static_value(self.results[key])
-			logger.info("Found - {}:{}".format(key, self.results[key]))
-		
-		json_file = self.directory + '/' + self.clean_filename(self.results['name']) +'.json'
-		with open(json_file, 'w', encoding='utf-8') as f:
-			json.dump(json.dumps(self.results), f)
+					if "@Temperature" in self.results[key]:
+						self.results[key] = self.convert_temp_dep(self.results[key])
+					else:
+						self.results[key] = self.convert_static_value(self.results[key])
+				logger.info("Found - {}:{}".format(key, self.results[key]))
+			
+			
+			with open(json_file, 'w', encoding='utf-8') as f:
+				json.dump(json.dumps(self.results), f)
+				
+			time.sleep(1)
+		else:
+			logger.info("Passing on material - {} - file already exists".format(mat_key))
+			thing()
 
 
 class LinkFollower:
@@ -225,8 +231,8 @@ class LinkFollower:
 		
 		for mat in self.materials:
 			if self.verify_key(mat):
-				Webpage(self.materials[mat], self.directory)
-				time.sleep(1)
+				worker = Webpage(self.materials[mat], self.directory)
+				worker.scrape_page(mat)
 	
 	def verify_key(self, test_key):
 		"""Makes sure that the material is something that we want to know about"""
@@ -264,7 +270,7 @@ group_base_url = "http://www.matweb.com/Search/MaterialGroupSearch.aspx?GroupID=
 directory = 'materialData'
 
 group_ids = [
-	['AISI 4000 Series Steel','230'],
+	#['AISI 4000 Series Steel','230'],
 	#['AISI 5000 Series Steel','231'],
 	#['AISI 6000 Series Steel','232'],
 	#['AISI 8000 Series Steel','233'],
@@ -291,7 +297,7 @@ group_ids = [
 	#['Precipitation Hardening Stainless (164 matls)', '264'],
 	#['T 300 Series Stainless Steel (551 matls)', '268'],
 	#['T 400 Series Stainless Steel (368 matls)', '269'],
-	#['T 600 Series Stainless Steel (37 matls)', '270'],
+	['T 600 Series Stainless Steel (37 matls)', '270'],
 	#['T S10000 Series Stainless Steel (75 matls)', '271'],
 	#['Tool Steel (588 matls)', '223'],
 	
@@ -299,5 +305,5 @@ group_ids = [
 
 
 worker = LinkFollower(directory)
-#worker.iterate_group_ids(group_base_url, group_ids)
+worker.iterate_group_ids(group_base_url, group_ids)
 worker.scrape_all_materials()
