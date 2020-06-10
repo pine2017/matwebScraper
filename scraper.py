@@ -53,7 +53,11 @@ class Webpage:
 		for char in self.removal_char:
 			units = units.replace(char[0], char[1])
 		return units
-
+	
+	def clean_filename(self, filename):
+		"""Takes out all the special characters for a valid filename"""
+		return ''.join(ch for ch in filename if ch.isalnum())
+	
 	def more_data(self, more_text):
 		"""Appends new data to the prev thing list"""
 		if type(self.results[self.prev_key]) is list:
@@ -163,7 +167,7 @@ class Webpage:
 					self.results[key] = self.convert_static_value(self.results[key])
 			logger.info("Found - {}:{}".format(key, self.results[key]))
 		
-		json_file = self.directory + '/' + self.results['name'] +'.json'
+		json_file = self.directory + '/' + self.clean_filename(self.results['name']) +'.json'
 		with open(json_file, 'w', encoding='utf-8') as f:
 			json.dump(json.dumps(self.results), f)
 
@@ -175,7 +179,9 @@ class LinkFollower:
 		#self.url = base_url
 		self.pass_list = ['[Prev Page]', '[Next Page]']
 		self.materials = {}
-	
+		self.load_dump = True
+		self.filename = 'url_dump.json'
+		
 	def get_urls(self, link_list):
 		for thing in link_list:
 			next_mat = thing.text
@@ -202,16 +208,20 @@ class LinkFollower:
 	
 	def iterate_group_ids(self, base_url, lists):
 		logger.info('Searching for urls from - {}'.format(base_url))
+		self.load_urls()
 		
 		for mat in lists:
 			logger.info("Searching for - {}".format(mat[0]))
 			url = base_url + mat[1]
 			logger.debug('Searching at - {}'.format(url))
 			self.scrape_urls(url)
+			
+		self.dump_urls()
 	
 	def scrape_all_materials(self):
 		"""Scraping all the materials we found to get their data"""
 		logger.info("Starting to actually get their information")
+		self.load_urls()
 		
 		for mat in self.materials:
 			if self.verify_key(mat):
@@ -229,10 +239,20 @@ class LinkFollower:
 		
 		return ok 
 	
-	def dump_urls(self, filename):
+	def load_urls(self):
+		"""Loads the self.filename into materials"""
+		if self.load_dump:
+			logger.info('Loading urls from disk at {}'.format(self.filename))
+			try:
+				with open(self.filename) as json_file: 
+					self.materials = json.load(json_file) 
+			except:
+				self.materials = {}
+	
+	def dump_urls(self, ):
 		"""Saves the results to disk for later use if wanted"""
 		logger.info('Saving {} urls to disk'.format(len(self.materials.keys())))
-		with open(filename, 'w', encoding='utf-8') as f:
+		with open(self.filename, 'w', encoding='utf-8') as f:
 			json.dump(self.materials, f, indent=4)
 
 
@@ -245,40 +265,39 @@ directory = 'materialData'
 
 group_ids = [
 	['AISI 4000 Series Steel','230'],
-	['AISI 5000 Series Steel','231'],
-	['AISI 6000 Series Steel','232'],
-	['AISI 8000 Series Steel','233'],
-	['AISI 9000 Series Steel','234'],
-	['Low Alloy Steel','253'],
-	['Medium Alloy Steel','258'],
+	#['AISI 5000 Series Steel','231'],
+	#['AISI 6000 Series Steel','232'],
+	#['AISI 8000 Series Steel','233'],
+	#['AISI 9000 Series Steel','234'],
+	#['Low Alloy Steel','253'],
+	#['Medium Alloy Steel','258'],
 	
-	['ASTM Steels','236'],
+	#['ASTM Steels','236'],
 	
-	['AISI 1000 Series Steel (624 matls)', '229'],
-	['High Carbon Steel (401 matls)', '249'],
-	['Low Carbon Steel (1413 matls)', '254'],
-	['Medium Carbon Steel (955 matls)', '259'],
+	#['AISI 1000 Series Steel (624 matls)', '229'],
+	#['High Carbon Steel (401 matls)', '249'],
+	#['Low Carbon Steel (1413 matls)', '254'],
+	#['Medium Carbon Steel (955 matls)', '259'],
 	
-	['Cast Iron', '227'],
+	#['Cast Iron', '227'],
 	
-	['Chrome-moly Steel','240'],
+	#['Chrome-moly Steel','240'],
 	
-	['Duplex (45 matls)', '244'],
-	['Maraging Steel (64 matls)', '256'],
-	['Pressure Vessel Steel (22 matls)', '265'],
-	['Special-Purpose Steel (50 matls)', '267'],
-	['Cast Stainless Steel (450 matls)', '239'],
-	['Precipitation Hardening Stainless (164 matls)', '264'],
-	['T 300 Series Stainless Steel (551 matls)', '268'],
-	['T 400 Series Stainless Steel (368 matls)', '269'],
-	['T 600 Series Stainless Steel (37 matls)', '270'],
-	['T S10000 Series Stainless Steel (75 matls)', '271'],
-	['Tool Steel (588 matls)', '223'],
+	#['Duplex (45 matls)', '244'],
+	#['Maraging Steel (64 matls)', '256'],
+	#['Pressure Vessel Steel (22 matls)', '265'],
+	#['Special-Purpose Steel (50 matls)', '267'],
+	#['Cast Stainless Steel (450 matls)', '239'],
+	#['Precipitation Hardening Stainless (164 matls)', '264'],
+	#['T 300 Series Stainless Steel (551 matls)', '268'],
+	#['T 400 Series Stainless Steel (368 matls)', '269'],
+	#['T 600 Series Stainless Steel (37 matls)', '270'],
+	#['T S10000 Series Stainless Steel (75 matls)', '271'],
+	#['Tool Steel (588 matls)', '223'],
 	
 	]
 
 
 worker = LinkFollower(directory)
-worker.iterate_group_ids(group_base_url, group_ids)
-worker.dump_urls('url_dump.json')
+#worker.iterate_group_ids(group_base_url, group_ids)
 worker.scrape_all_materials()
