@@ -20,7 +20,7 @@ logger.setLevel(logging.DEBUG)
 
 ch = logging.StreamHandler()
 formatter = logging.Formatter('%(name)s:%(levelname)s: %(message)s')
-ch.setLevel(logging.INFO)
+ch.setLevel(logging.DEBUG)
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
@@ -32,7 +32,7 @@ logger.addHandler(fh)
 
 class Webpage:
 	"""Takes a url for a matweb web page and creates a json file of all its info"""
-	def __init__(self, url, directory):
+	def __init__(self,  url, directory):
 		self.results = {}
 		self.removal_char = [["\xb0", ''], ['\xB5', 'u']]
 		self.prev_key = None
@@ -170,50 +170,104 @@ class Webpage:
 
 class LinkFollower:
 	"""Finds all the links on a matweb group page and follows them and dumps them to json"""
-	def __init__(self, base_url, directory):
+	def __init__(self, directory):
 		self.directory = directory
-		self.url = base_url
+		#self.url = base_url
 		self.pass_list = ['[Prev Page]', '[Next Page]']
-		
 		self.materials = {}
-		self.find_urls()
-		
-		
-		
-	def find_urls(self):
-		browser.get(self.url)
-		
-		link_list = browser.find_elements_by_xpath('/html/body/form/div/table/tbody/tr/td/div/table/tbody/tr/td/a')
-		
+	
+	def get_urls(self, link_list):
 		for thing in link_list:
 			next_mat = thing.text
 			next_link = thing.get_attribute('href')
 			
 			if next_link is not None and next_mat not in self.pass_list:
-				logger.info("Found new material - {}:{}".format(next_mat, next_link))
+				logger.info("Found new material - {} : {}".format(next_mat, next_link))
 				self.materials[next_mat] = next_link
+	
+	def scrape_urls(self, url=None):
+		if url is not None:
+			browser.get(url)
+		
+		while True:
+			link_list = browser.find_elements_by_xpath('/html/body/form/div/table/tbody/tr/td/div/table/tbody/tr/td/a')
+			self.get_urls(link_list)
 			
+			next_button = browser.find_element_by_partial_link_text('Next Page')
+			if next_button.value_of_css_property('color') == "rgb(0, 0, 0)":
+				next_button.click()
+			else:
+				break
 			time.sleep(1) #put this in here so we don't overload their servers
-	#use this to click on to the next page
-	#driver.find_element_by_partial_link_text('Next Page').click()
+	
+	def iterate_group_ids(self, base_url, lists):
+		logger.info('Searching for urls from - {}'.format(base_url))
+		
+		for mat in lists:
+			logger.info("Searching for - {}".format(mat[0]))
+			url = base_url + mat[1]
+			logger.debug('Searching at - {}'.format(url))
+			self.scrape_urls(url)
+	
+	def scrape_all_materials(self):
+		"""Scraping all the materials we found to get their data"""
+		logger.info("Starting to actually get their information")
+		
+		for mat in self.materials:
+			if self.verify_key(mat):
+				Webpage(self.materials[mat], self.directory)
+				time.sleep(1)
+		
+	def dump_urls(self, filename):
+		"""Saves the results to disk for later use if wanted"""
+		logger.info('Saving {} urls to disk'.format(len(self.materials.keys())))
+		with open(filename, 'w', encoding='utf-8') as f:
+			json.dump(json.dumps(self.materials), f)
+
 
 
 
 
 ########################### HERE'S WHERE ALL THE WORK BEGINS ####################################
-webpages = [
-		"http://www.matweb.com/search/DataSheet.aspx?MatGUID=9d1e943f7daf49ef92e1d8261a8c6fc6",
-		"http://www.matweb.com/search/datasheet.aspx?MatGUID=1e1bb328dc144aa3b50d3eb9c39f8b8b",
-		"http://www.matweb.com/search/datasheet.aspx?MatGUID=dd9850edc3bc4dd589f89662e0028daa",
-		"http://www.matweb.com/search/DataSheet.aspx?MatGUID=0f02241c8c6c4659ba637c63928d50ac",
-		]
-
-
-ferrous_group = "http://www.matweb.com/Search/MaterialGroupSearch.aspx?GroupID=176"
+group_base_url = "http://www.matweb.com/Search/MaterialGroupSearch.aspx?GroupID="
 directory = 'materialData'
 
-LinkFollower(ferrous_group, directory)
+group_ids = [
+	['AISI 4000 Series Steel','230'],
+	['AISI 5000 Series Steel','231'],
+	['AISI 6000 Series Steel','232'],
+	['AISI 8000 Series Steel','233'],
+	['AISI 9000 Series Steel','234'],
+	['Low Alloy Steel','253'],
+	['Medium Alloy Steel','258'],
+	
+	['ASTM Steels','236'],
+	
+	['AISI 1000 Series Steel (624 matls)', '229'],
+	['High Carbon Steel (401 matls)', '249'],
+	['Low Carbon Steel (1413 matls)', '254'],
+	['Medium Carbon Steel (955 matls)', '259'],
+	
+	['Cast Iron', '227'],
+	
+	['Chrome-moly Steel','240'],
+	
+	['Duplex (45 matls)', '244'],
+	['Maraging Steel (64 matls)', '256'],
+	['Pressure Vessel Steel (22 matls)', '265'],
+	['Special-Purpose Steel (50 matls)', '267'],
+	['Cast Stainless Steel (450 matls)', '239'],
+	['Precipitation Hardening Stainless (164 matls)', '264'],
+	['T 300 Series Stainless Steel (551 matls)', '268'],
+	['T 400 Series Stainless Steel (368 matls)', '269'],
+	['T 600 Series Stainless Steel (37 matls)', '270'],
+	['T S10000 Series Stainless Steel (75 matls)', '271'],
+	['Tool Steel (588 matls)', '223'],
+	
+	]
 
 
-#for webpage in webpages:
-	#Webpage(webpage)
+worker = LinkFollower(directory)
+worker.iterate_group_ids(group_base_url, group_ids)
+worker.dump_urls('url_dump.json')
+worker.scrape_all_materials()
