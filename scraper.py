@@ -20,7 +20,7 @@ logger.setLevel(logging.DEBUG)
 
 ch = logging.StreamHandler()
 formatter = logging.Formatter('%(name)s:%(levelname)s: %(message)s')
-ch.setLevel(logging.DEBUG)
+ch.setLevel(logging.ERROR)
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
