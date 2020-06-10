@@ -35,7 +35,7 @@ class Webpage:
 	"""Takes a url for a matweb web page and creates a json file of all its info"""
 	def __init__(self,  url, directory):
 		self.results = {}
-		self.removal_char = [["\xb0", ''], ['\xB5', 'u']]
+		self.removal_char = [["\xb0", ''], ['\xB5', 'u'], ['\xAE', '']]
 		self.prev_key = None
 		self.pass_list = ['name']
 		self.directory = directory
@@ -94,7 +94,7 @@ class Webpage:
 			except:
 				logger.error('Error with material percentage range {}'.format(split_results))
 		else:
-			logger.error('Other stuff is happening that Im not ready for {}'.format(split_results))
+			logger.error("Static conversion is FUBAR'D {}".format(split_results))
 		
 		
 		return values
@@ -122,14 +122,22 @@ class Webpage:
 			except:
 				logger.error('error with 5 value temp dependent conversion {}'.format(split_results))
 		else:
-			logger.error('Other stuff is happening in lists that Im not ready for {}'.format(split_results))
+			logger.error("Temp dependent is FUBAR'D {}".format(split_results))
 		
 		return values
-
+	
+	def pick_conversion(self, thingy):
+		"""Picks the best conversion thing based on the inputs"""
+		if "@Temperature" in thingy:
+			return self.convert_temp_dep(thingy)
+		else:
+			return self.convert_static_value(thingy)
+		
+		return 
 	def scrape_page(self, mat_key):
 		"""Gets all the data from a particular url"""
 		json_file = self.directory + '/' + self.clean_unicode(mat_key) +'.json'
-		print('here', json_file)
+		
 		if (not path.exists(json_file)) or self.override: 
 			browser.get(self.url)
 			
@@ -158,16 +166,15 @@ class Webpage:
 			#cleaning all the strings and converting them into usable stuff
 			for key in self.results.keys():
 				if type(self.results[key]) is list:
-					self.results[key] = [self.convert_temp_dep(data_point) for data_point in self.results[key]]
+					listed_results = []
+					for data_point in self.results[key]:
+						listed_results.append(self.pick_conversion(data_point))
+					self.results[key] = listed_results
 				elif key in self.pass_list:
 					pass
 				else:
-					if "@Temperature" in self.results[key]:
-						self.results[key] = self.convert_temp_dep(self.results[key])
-					else:
-						self.results[key] = self.convert_static_value(self.results[key])
+					self.results[key] = self.pick_conversion(self.results[key])
 				logger.info("Found - {}:{}".format(key, self.results[key]))
-			
 			
 			with open(json_file, 'w', encoding='utf-8') as f:
 				json.dump(json.dumps(self.results), f)
@@ -270,7 +277,7 @@ group_base_url = "http://www.matweb.com/Search/MaterialGroupSearch.aspx?GroupID=
 directory = 'materialData'
 
 group_ids = [
-	#['AISI 4000 Series Steel','230'],
+	['AISI 4000 Series Steel','230'],
 	#['AISI 5000 Series Steel','231'],
 	#['AISI 6000 Series Steel','232'],
 	#['AISI 8000 Series Steel','233'],
@@ -297,7 +304,7 @@ group_ids = [
 	#['Precipitation Hardening Stainless (164 matls)', '264'],
 	#['T 300 Series Stainless Steel (551 matls)', '268'],
 	#['T 400 Series Stainless Steel (368 matls)', '269'],
-	['T 600 Series Stainless Steel (37 matls)', '270'],
+	#['T 600 Series Stainless Steel (37 matls)', '270'],
 	#['T S10000 Series Stainless Steel (75 matls)', '271'],
 	#['Tool Steel (588 matls)', '223'],
 	
