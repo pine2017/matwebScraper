@@ -56,6 +56,11 @@ class Webpage:
 			units = units.replace(char[0], char[1])
 		return units
 	
+	def clean_filename(self, filename):
+		filename = self.clean_unicode(filename)
+		filename = filename.replace('/', '')
+		return filename
+	
 	def more_data(self, more_text):
 		"""Appends new data to the prev thing list"""
 		if type(self.results[self.prev_key]) is list:
@@ -132,11 +137,10 @@ class Webpage:
 			return self.convert_temp_dep(thingy)
 		else:
 			return self.convert_static_value(thingy)
-		
-		return 
+	
 	def scrape_page(self, mat_key):
 		"""Gets all the data from a particular url"""
-		json_file = self.directory + '/' + self.clean_unicode(mat_key) +'.json'
+		json_file = self.directory + '/' + self.clean_filename(mat_key) +'.json'
 		
 		if (not path.exists(json_file)) or self.override: 
 			browser.get(self.url)
@@ -182,7 +186,6 @@ class Webpage:
 			time.sleep(1)
 		else:
 			logger.info("Passing on material - {} - file already exists".format(mat_key))
-			thing()
 
 
 class LinkFollower:
