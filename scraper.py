@@ -217,12 +217,23 @@ class LinkFollower:
 			if self.verify_key(mat):
 				Webpage(self.materials[mat], self.directory)
 				time.sleep(1)
+	
+	def verify_key(self, test_key):
+		"""Makes sure that the material is something that we want to know about"""
+		ok = True
 		
+		if 'Overview' in test_key:
+			logger.debug("{} not scraped: Overview".format(test_key))
+			ok = False
+		
+		
+		return ok 
+	
 	def dump_urls(self, filename):
 		"""Saves the results to disk for later use if wanted"""
 		logger.info('Saving {} urls to disk'.format(len(self.materials.keys())))
 		with open(filename, 'w', encoding='utf-8') as f:
-			json.dump(json.dumps(self.materials), f)
+			json.dump(self.materials, f, indent=4)
 
 
 
