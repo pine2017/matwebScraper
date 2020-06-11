@@ -180,6 +180,10 @@ class Webpage:
 					self.results[key] = self.pick_conversion(self.results[key])
 				logger.info("Found - {}:{}".format(key, self.results[key]))
 			
+			if list(self.results.keys()) == ['name']:
+				logger.error("Only the name of the material is in here. Go see if your IP has been restricted")
+				exit()
+			
 			with open(json_file, 'w', encoding='utf-8') as f:
 				json.dump(json.dumps(self.results), f)
 				
@@ -220,7 +224,7 @@ class LinkFollower:
 				next_button.click()
 			else:
 				break
-			time.sleep(1) #put this in here so we don't overload their servers
+			time.sleep(5) #put this in here so we don't overload their servers
 	
 	def iterate_group_ids(self, base_url, lists):
 		logger.info('Searching for urls from - {}'.format(base_url))
